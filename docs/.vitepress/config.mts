@@ -1,3 +1,4 @@
+import taskLists from 'markdown-it-task-lists'
 import { defineConfig } from 'vitepress'
 
 // https://vitepress.dev/reference/site-config
@@ -213,32 +214,7 @@ export default defineConfig({
   markdown: {
     math: true,
     config(md) {
-      md.core.ruler.after('inline', 'task-lists', (state) => {
-        for (let index = 2; index < state.tokens.length; index++) {
-          const inlineToken = state.tokens[index]
-          const marker = inlineToken.content.match(/^\[([ xX])\]\s+/)
-          const firstChild = inlineToken.children?.[0]
-
-          if (
-            inlineToken.type !== 'inline' ||
-            state.tokens[index - 1].type !== 'paragraph_open' ||
-            state.tokens[index - 2].type !== 'list_item_open' ||
-            !marker ||
-            firstChild?.type !== 'text'
-          ) {
-            continue
-          }
-
-          inlineToken.content = inlineToken.content.slice(marker[0].length)
-          firstChild.content = firstChild.content.slice(marker[0].length)
-
-          const checkbox = new state.Token('html_inline', '', 0)
-          const checked = marker[1].toLowerCase() === 'x'
-          checkbox.content = `<input class="task-list-item-checkbox" type="checkbox" disabled${checked ? ' checked' : ''}> `
-          inlineToken.children?.unshift(checkbox)
-          state.tokens[index - 2].attrJoin('class', 'task-list-item')
-        }
-      })
+      md.use(taskLists)
     }
   },
   
