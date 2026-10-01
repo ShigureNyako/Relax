@@ -273,17 +273,17 @@ ______________________________________________________________________
 
 ## 🧩 基于 Relax 构建的项目
 
-使用 Relax 的研究项目与训练配方。下列论文链接均指向 arXiv 预印本。
+使用 Relax 的研究项目与训练配方。
 
-| 项目                                                               | 描述                                                                                                                       | 论文                                                 |
-| :----------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------- |
-| [HyperEyes](https://github.com/DeepExperience/HyperEyes)           | 结合视觉定位与检索的并行多模态搜索智能体；使用 Relax 进行基于 TRACE 奖励的 RL 训练与 on-policy distillation。              | [arXiv:2605.07177](https://arxiv.org/abs/2605.07177) |
-| [Iris](https://github.com/AllSpark-Research/Iris)                  | 面向长程搜索、迭代证据收集与上下文管理的搜索智能体；使用 Relax 作为 RL 引擎。评测框架已公开，训练流水线尚待发布。          | [arXiv:2609.04304](https://arxiv.org/abs/2609.04304) |
-| [Harness-R1](https://github.com/DeepExperience/Harness-R1)         | 从智能体失败轨迹中学习生成可执行的运行时框架补丁；用 Relax GRPO 训练补丁生成模型，以目标智能体重新执行任务的结果作为奖励。 | [arXiv:2608.02276](https://arxiv.org/abs/2608.02276) |
-| [OmniCoding / Code-X](https://github.com/Dongping-Chen/OmniCoding) | 通过沙箱内的编码智能体解决多模态任务；Code-X 利用 Relax 的 rollout 与奖励扩展接口进行 GSPO 后训练。                        | [arXiv:2606.00579](https://arxiv.org/abs/2606.00579) |
-| [OPOD](https://github.com/VincentZhao2002/OPOD)                    | 将文本、图像、音频教师蒸馏到单个全模态学生；在 Relax 上扩展模态路由、单侧教师指导与验证奖励。                              | [arXiv:2607.20918](https://arxiv.org/abs/2607.20918) |
-| [Hint Tuning](https://github.com/redai-studio/hint-tuning)         | 通过最小提示构造按难度调整思维链长度的数据；使用 Relax 进行 SFT 实验。                                                     | [arXiv:2605.08665](https://arxiv.org/abs/2605.08665) |
-| [Omni-LoRA-RL](https://github.com/SakaiXue6666/Omni-LoRA-RL)       | Qwen3-Omni 英语语音到中文文本的训练配方，使用 Relax LoRA/GRPO、BLEU 奖励与 SGLang adapter 服务。                           | 训练配方；未找到对应论文                             |
+| 项目                                                               | 描述                                                                                                                       |
+| :----------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------- |
+| [HyperEyes](https://github.com/DeepExperience/HyperEyes)           | 结合视觉定位与检索的并行多模态搜索智能体；使用 Relax 进行基于 TRACE 奖励的 RL 训练与 on-policy distillation。              |
+| [Iris](https://github.com/AllSpark-Research/Iris)                  | 面向长程搜索、迭代证据收集与上下文管理的搜索智能体；使用 Relax 作为 RL 引擎。评测框架已公开，训练流水线尚待发布。          |
+| [Harness-R1](https://github.com/DeepExperience/Harness-R1)         | 从智能体失败轨迹中学习生成可执行的运行时框架补丁；用 Relax GRPO 训练补丁生成模型，以目标智能体重新执行任务的结果作为奖励。 |
+| [OmniCoding / Code-X](https://github.com/Dongping-Chen/OmniCoding) | 通过沙箱内的编码智能体解决多模态任务；Code-X 利用 Relax 的 rollout 与奖励扩展接口进行 GSPO 后训练。                        |
+| [OPOD](https://github.com/VincentZhao2002/OPOD)                    | 将文本、图像、音频教师蒸馏到单个全模态学生；在 Relax 上扩展模态路由、单侧教师指导与验证奖励。                              |
+| [Hint Tuning](https://github.com/redai-studio/hint-tuning)         | 通过最小提示构造按难度调整思维链长度的数据；使用 Relax 进行 SFT 实验。                                                     |
+| [Omni-LoRA-RL](https://github.com/SakaiXue6666/Omni-LoRA-RL)       | Qwen3-Omni 英语语音到中文文本的训练配方，使用 Relax LoRA/GRPO、BLEU 奖励与 SGLang adapter 服务。                           |
 
 ______________________________________________________________________
 

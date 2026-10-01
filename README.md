@@ -273,17 +273,17 @@ ______________________________________________________________________
 
 ## 🧩 Projects Built upon Relax
 
-Research projects and training recipes using Relax. Paper links below point to arXiv preprints.
+Research projects and training recipes using Relax.
 
-| Project                                                            | Description                                                                                                                                                                                  | Paper                                                |
-| :----------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------- |
-| [HyperEyes](https://github.com/DeepExperience/HyperEyes)           | Parallel multimodal search combining visual grounding and retrieval; uses Relax for TRACE-reward RL and on-policy distillation.                                                              | [arXiv:2605.07177](https://arxiv.org/abs/2605.07177) |
-| [Iris](https://github.com/AllSpark-Research/Iris)                  | Long-horizon search agents with iterative evidence gathering and context management; use Relax as the RL engine. The evaluation harness is public; the training pipeline is pending release. | [arXiv:2609.04304](https://arxiv.org/abs/2609.04304) |
-| [Harness-R1](https://github.com/DeepExperience/Harness-R1)         | Learns executable runtime-harness patches from agent failures; trains the patch-writing model with Relax GRPO and rewards from target-agent reruns.                                          | [arXiv:2608.02276](https://arxiv.org/abs/2608.02276) |
-| [OmniCoding / Code-X](https://github.com/Dongping-Chen/OmniCoding) | Sandboxed coding agents for multimodal tasks; Code-X uses Relax rollout and reward hooks for GSPO post-training.                                                                             | [arXiv:2606.00579](https://arxiv.org/abs/2606.00579) |
-| [OPOD](https://github.com/VincentZhao2002/OPOD)                    | Distills text, image, and audio teachers into one omni-modal student; extends Relax with modality routing, one-sided guidance, and verification rewards.                                     | [arXiv:2607.20918](https://arxiv.org/abs/2607.20918) |
-| [Hint Tuning](https://github.com/redai-studio/hint-tuning)         | Uses minimal hints to construct difficulty-adaptive chain-of-thought data; runs SFT experiments with Relax.                                                                                  | [arXiv:2605.08665](https://arxiv.org/abs/2605.08665) |
-| [Omni-LoRA-RL](https://github.com/SakaiXue6666/Omni-LoRA-RL)       | Qwen3-Omni English-speech-to-Chinese-text training recipe using Relax LoRA/GRPO, a BLEU reward, and SGLang adapter serving.                                                                  | Training recipe; no paper identified                 |
+| Project                                                            | Description                                                                                                                                                                                  |
+| :----------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [HyperEyes](https://github.com/DeepExperience/HyperEyes)           | Parallel multimodal search combining visual grounding and retrieval; uses Relax for TRACE-reward RL and on-policy distillation.                                                              |
+| [Iris](https://github.com/AllSpark-Research/Iris)                  | Long-horizon search agents with iterative evidence gathering and context management; use Relax as the RL engine. The evaluation harness is public; the training pipeline is pending release. |
+| [Harness-R1](https://github.com/DeepExperience/Harness-R1)         | Learns executable runtime-harness patches from agent failures; trains the patch-writing model with Relax GRPO and rewards from target-agent reruns.                                          |
+| [OmniCoding / Code-X](https://github.com/Dongping-Chen/OmniCoding) | Sandboxed coding agents for multimodal tasks; Code-X uses Relax rollout and reward hooks for GSPO post-training.                                                                             |
+| [OPOD](https://github.com/VincentZhao2002/OPOD)                    | Distills text, image, and audio teachers into one omni-modal student; extends Relax with modality routing, one-sided guidance, and verification rewards.                                     |
+| [Hint Tuning](https://github.com/redai-studio/hint-tuning)         | Uses minimal hints to construct difficulty-adaptive chain-of-thought data; runs SFT experiments with Relax.                                                                                  |
+| [Omni-LoRA-RL](https://github.com/SakaiXue6666/Omni-LoRA-RL)       | Qwen3-Omni English-speech-to-Chinese-text training recipe using Relax LoRA/GRPO, a BLEU reward, and SGLang adapter serving.                                                                  |
 
 ______________________________________________________________________
 
