@@ -442,13 +442,8 @@
   margin-top: 16px;
 }
 
-/* Nav bar: make it dark & translucent on home pages */
-.VPNav {
-  transition: background 0.3s ease;
-}
-
-/* Keep blur off VPNav so the fixed mobile menu stays relative to the viewport. */
-.is-home ~ .VPNav .VPNavBar,
+/* Nav bar: dark & translucent on home; keep blur off VPNav so the fixed
+   mobile menu stays viewport-relative. */
 body:has(.VPContent.is-home) .VPNavBar {
   background: rgba(14, 14, 17, 0.6) !important;
   backdrop-filter: blur(20px);
