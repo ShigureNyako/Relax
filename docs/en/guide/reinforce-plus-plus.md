@@ -1,15 +1,15 @@
 # REINFORCE++ Training
 
-REINFORCE++ is a policy gradient algorithm that does not require a Critic. It computes advantages from rewards and updates the policy with a PPO-style clipped objective. If you already have a GRPO training setup, you can reuse its Actor/Rollout service topology and replace the algorithm arguments.
+REINFORCE++ is a policy gradient algorithm that does not require a Critic. In Relax, it computes advantages from rewards and updates the policy with a PPO-style clipped objective. If you already have a GRPO training setup, you can keep the same Actor and Rollout deployments and replace the algorithm arguments.
 
 ## Overview
 
 Relax provides two variants. They differ in how they compute advantages and how they penalize deviation from the reference policy:
 
 - **REINFORCE++** (`reinforce_plus_plus`) combines the final reward with per-token k1 KL penalties, then accumulates them into token returns. The reference-policy penalty therefore contributes to the advantages.
-- **REINFORCE++-baseline** (`reinforce_plus_plus_baseline`) generates multiple responses to each prompt and subtracts the group's mean reward from each response reward. It applies reference-policy regularization through a separate k2 KL loss, leaving advantages independent of that penalty.
+- **REINFORCE++-baseline** (`reinforce_plus_plus_baseline`) generates multiple responses to each prompt and subtracts the group's mean reward from each response reward to obtain raw advantages. It applies reference-policy regularization through a separate k2 KL loss, leaving advantages independent of that penalty.
 
-The baseline mean includes the current response, unlike RLOO's leave-one-out mean. It also does not divide by the group standard deviation as GRPO does. See the [Algorithm Reference](../examples/algorithms.md) for other algorithms.
+The baseline mean includes the current response, unlike RLOO's leave-one-out mean. It also does not divide by the group standard deviation as GRPO does by default. See the [Algorithm Reference](../examples/algorithms.md) for other algorithms.
 
 Both variants normalize advantages over valid response tokens across the entire training batch, including all data-parallel ranks. Prompt tokens, padding, and masked tokens are excluded. Longer responses contribute more tokens to these statistics, while the loss is averaged within each response and then across responses.
 
@@ -122,7 +122,7 @@ TensorBoard events are written to `OUTPUT_DIR/actor/tensorboard_log`, unless ove
 
 Check labels and generated responses first. The `math` reward extracts the final answer from `\boxed{...}` and returns zero if extraction fails. Labels should contain final answers, not full solution rationales.
 
-For the baseline, equal rewards within a prompt group become zero advantages after subtracting the group mean. That group has no relative training signal; changing normalization is not the first remedy. Inspect `rollout/reinforce_pp_advantage_raw_std` and `rollout/reinforce_pp_zero_variance`. Constant raw advantages normalize to zero, while a batch with no valid tokens raises an error.
+For the baseline, equal rewards within a prompt group produce zero raw advantages after subtracting the group mean: those rewards do not distinguish between that prompt's responses. Normalized values also depend on the full batch's token statistics. Check `rollout/reinforce_pp_advantage_raw_std` and `rollout/reinforce_pp_zero_variance` before changing normalization. Constant raw advantages normalize to zero, while a batch with no valid tokens raises an error.
 
 ### Pending Actors or GPU Out-of-Memory Errors
 

@@ -1,15 +1,15 @@
 # REINFORCE++ 训练
 
-REINFORCE++ 是一种不需要 Critic 的策略梯度算法。它根据奖励计算优势值（advantage），再使用 PPO 风格的裁剪目标更新策略。已有 GRPO 训练配置时，可以复用 Actor/Rollout 服务拓扑，替换算法参数。
+REINFORCE++ 是一种不需要 Critic 的策略梯度算法。Relax 根据奖励计算优势值（advantage），再使用 PPO 风格的裁剪目标更新策略。已有 GRPO 训练配置时，可以沿用 Actor 和 Rollout 的部署方式，替换算法参数。
 
 ## 概述
 
 Relax 提供两个变体，主要区别是如何计算优势值，以及如何约束策略偏离参考模型：
 
 - **REINFORCE++**（`reinforce_plus_plus`）：将最终奖励与逐 token 的 k1 KL 惩罚合并，再累积得到各 token 的回报值（return）。这样，参考策略惩罚会参与优势值计算。
-- **REINFORCE++-baseline**（`reinforce_plus_plus_baseline`）：为同一提示词生成多个回答，用每个回答的奖励减去组内平均奖励作为优势值。参考策略惩罚通过独立的 k2 KL 损失加入，不影响优势值。
+- **REINFORCE++-baseline**（`reinforce_plus_plus_baseline`）：为同一提示词生成多个回答，用每个回答的奖励减去组内平均奖励，得到原始优势值。参考策略惩罚通过独立的 k2 KL 损失加入，不影响优势值。
 
-baseline 的组均值包含当前回答；它既不像 RLOO 那样排除当前回答，也不像 GRPO 那样除以组内标准差。不同算法的对比见[算法参考](../examples/algorithms.md)。
+baseline 的组均值包含当前回答；它既不像 RLOO 那样排除当前回答，也不像默认的 GRPO 奖励处理那样除以组内标准差。不同算法的对比见[算法参考](../examples/algorithms.md)。
 
 两种变体都会在整个训练批次的有效回答 token 上归一化优势值，包括跨数据并行 rank 的统计。提示词、padding 和被 mask 的 token 不参与统计，较长回答因 token 更多而占更大权重。损失则先在每个回答内求均值，再跨回答求均值。
 
@@ -92,7 +92,7 @@ ALGORITHM_ARGS=(
 )
 ```
 
-这里使用 k1 KL 惩罚，即 `-kl_coef × (log_prob_old - log_prob_ref)`。最终奖励加到最后一个有效回答 token，再从后向前累积；`gamma=1.0` 表示不打折。`--kl-coef` 必须为正，且不能同时启用 `--use-kl-loss`。
+这里使用 k1 KL 惩罚，即 `-kl_coef × (log_prob_old - log_prob_ref)`。最终奖励加到最后一个有效回答 token，再从后向前累积；`gamma=1.0` 表示不对后续奖励做折扣。`--kl-coef` 必须为正，且不能同时启用 `--use-kl-loss`。
 
 **REINFORCE++-baseline：**
 
@@ -122,7 +122,7 @@ Relax 默认选择 GRPO，关闭优势值归一化，两个 KL 系数均为零�
 
 先检查标签和生成回答。`math` 奖励函数从回答中的 `\boxed{...}` 提取最终答案，无法提取时返回零；标签应是最终答案，而非完整解题过程。
 
-如果 baseline 同一组的回答奖励都相同，减去组均值后优势值就是零。这表示该组没有相对训练信号，不必先改归一化参数。可查看 `rollout/reinforce_pp_advantage_raw_std` 和 `rollout/reinforce_pp_zero_variance`；原始优势值全部相同时，归一化结果为零，整个批次没有有效 token 时则会报错。
+baseline 中，同组奖励都相同时，减去组均值后原始优势值为零，奖励无法区分该提示词下的回答。归一化后的值还受整批 token 统计影响。可先查看 `rollout/reinforce_pp_advantage_raw_std` 和 `rollout/reinforce_pp_zero_variance`，而不是修改归一化参数；原始优势值全部相同时，归一化结果为零，整个批次没有有效 token 时则会报错。
 
 ### 一直等待调度或显存不足
 
