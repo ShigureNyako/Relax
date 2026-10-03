@@ -45,7 +45,7 @@ export OUTPUT_DIR=/path/to/runs/reinforce-plus-plus
 The launch helpers clean up previous training workers, jobs, Ray Serve applications, and placement groups. The recipe's direct local launch can also stop Ray and kill Python processes. Do not run these helpers on a shared host or cluster that has other workloads.
 :::
 
-In a dedicated training container, start a single-node Ray runtime with one visible GPU:
+Expose only the GPU assigned to this run in a dedicated training container. `--num-gpus=1` declares Ray capacity; it does not hide other GPUs. Start a single-node Ray runtime:
 
 ```bash
 ray start --head --num-gpus=1 --dashboard-host=127.0.0.1 --dashboard-port=8265
@@ -159,7 +159,7 @@ The recipe's TensorBoard events use `OUTPUT_DIR/actor/tensorboard_log` unless yo
 | GPU runs out of memory | Reduce the training or log-probability token budget. Adjust the SGLang memory fraction if inference allocation is the cause. See [OOM Troubleshooting](./oom-troubleshooting.md). |
 | Responses often reach the token limit | Check `rollout/response_len/mean` and `rollout/truncated_ratio`. Increase `ROLLOUT_MAX_RESPONSE_LEN` only if your memory budget permits. |
 | `train/ppo_kl` is zero | This metric compares the old and current policies. It does not measure reference-policy regularization. |
-| Need to inspect REINFORCE++ regularization | Compare same-step `rollout/returns` and `rollout/raw_reward` summaries. The k1 penalty is included in returns, not a separate `train/kl_loss`. |
+| Need to inspect REINFORCE++ regularization | Compare same-step `rollout/returns` and `rollout/raw_reward` summaries as a diagnostic, not a direct reference-KL estimate. The k1 penalty is included in returns, not a separate `train/kl_loss`. |
 | Need to inspect baseline regularization | Read `train/kl_loss`. Relax adds this k2 penalty to total loss after multiplying by `--kl-loss-coef`. |
 
 The `rollout/reinforce_pp_advantage_raw_std`, `rollout/reinforce_pp_advantage_normalized_std`, `rollout/reinforce_pp_valid_token_count`, and `rollout/reinforce_pp_zero_variance` metrics help diagnose the normalization population. Do not treat a single loss or KL value as a model-quality score. Use evaluation rewards as well.

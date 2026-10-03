@@ -45,7 +45,7 @@ export OUTPUT_DIR=/path/to/runs/reinforce-plus-plus
 启动脚本会清理之前的训练 worker、作业、Ray Serve 应用和 placement group。直接运行示例时，本地启动流程还可能停止 Ray 并终止 Python 进程。不要在有其他工作负载的共享主机或集群上运行这些脚本。
 :::
 
-在专用训练容器内启动单节点 Ray，分配一张可见 GPU：
+让专用训练容器只看到分配给本次训练的 GPU。`--num-gpus=1` 声明 Ray 的资源容量，不会隐藏其他 GPU。启动单节点 Ray：
 
 ```bash
 ray start --head --num-gpus=1 --dashboard-host=127.0.0.1 --dashboard-port=8265
@@ -158,7 +158,7 @@ baseline 从每个回答的奖励中减去同一提示词的平均奖励，再�
 | GPU 显存不足 | 降低训练或 log probability 计算的 token 预算。如果原因是推理侧分配，调整 SGLang 显存比例。参见 [OOM 排查](./oom-troubleshooting.md)。 |
 | 回答经常达到 token 上限 | 检查 `rollout/response_len/mean` 和 `rollout/truncated_ratio`。只有显存预算允许时，才增大 `ROLLOUT_MAX_RESPONSE_LEN`。 |
 | `train/ppo_kl` 为零 | 此指标比较旧策略与当前策略，不衡量参考策略惩罚。 |
-| 检查 REINFORCE++ 的参考策略惩罚 | 比较同一步的 `rollout/returns` 和 `rollout/raw_reward` 汇总。k1 惩罚已进入回报值，没有独立的 `train/kl_loss`。 |
+| 检查 REINFORCE++ 的参考策略惩罚 | 比较同一步的 `rollout/returns` 和 `rollout/raw_reward` 汇总作排查参考，不要将差值当作参考策略 KL 的直接估计。k1 惩罚已进入回报值，没有独立的 `train/kl_loss`。 |
 | 检查 baseline 的参考策略惩罚 | 查看 `train/kl_loss`。Relax 将该 k2 惩罚乘以 `--kl-loss-coef` 后加入总损失。 |
 
 `rollout/reinforce_pp_advantage_raw_std`、`rollout/reinforce_pp_advantage_normalized_std`、`rollout/reinforce_pp_valid_token_count` 和 `rollout/reinforce_pp_zero_variance` 可帮助排查归一化统计。不要用单个损失或 KL 值判断模型质量，还应查看评测奖励。
