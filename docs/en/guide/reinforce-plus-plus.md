@@ -1,69 +1,47 @@
-# Train with REINFORCE++
+# REINFORCE++ Training
 
-REINFORCE++ trains a policy without a Critic model. Relax provides two variants. Both use a clipped policy loss and normalize advantages across valid response tokens in the synchronous training batch. An advantage is the signal that tells the policy which generated tokens to reinforce.
+REINFORCE++ is a policy gradient algorithm that does not require a Critic. It computes advantages from rewards and updates the policy with a PPO-style clipped objective. If you already have a GRPO training setup, you can reuse its Actor/Rollout service topology and replace the algorithm arguments.
 
-## Choose a variant
+## Overview
 
-| Variant | Training signal | Reference-policy penalty | When to use it |
-|---|---|---|---|
-| `reinforce_plus_plus` | The final reward plus accumulated token penalties | k1 KL penalty inside the reward | Use it when you want token-level reference penalties to affect the return. |
-| `reinforce_plus_plus_baseline` | Each reward minus the mean reward for the same prompt | Separate k2 KL loss | Use it when you want to compare responses to the same prompt and keep the reference penalty out of the advantage. |
+Relax provides two variants. They differ in how they compute advantages and how they penalize deviation from the reference policy:
 
-The baseline mean includes the current response. It is not a leave-one-out mean. Unlike GRPO's default reward processing, this variant does not divide by the group standard deviation. See [Algorithms](../examples/algorithms.md) to compare other choices.
+- **REINFORCE++** (`reinforce_plus_plus`) combines the final reward with per-token k1 KL penalties, then accumulates them into token returns. The reference-policy penalty therefore contributes to the advantages.
+- **REINFORCE++-baseline** (`reinforce_plus_plus_baseline`) generates multiple responses to each prompt and subtracts the group's mean reward from each response reward. It applies reference-policy regularization through a separate k2 KL loss, leaving advantages independent of that penalty.
 
-Neither variant guarantees better rewards than GRPO. Evaluate the choice on your model and data.
+The baseline mean includes the current response, unlike RLOO's leave-one-out mean. It also does not divide by the group standard deviation as GRPO does. See the [Algorithm Reference](../examples/algorithms.md) for other algorithms.
 
-::: warning Supported training mode
-Use the Megatron backend with synchronous colocate training (`--colocate`), where training and generation share GPUs. Set `--context-parallel-size 1`. Do not enable `--fully-async`, `--hybrid`, or `--calculate-per-token-loss`. The argument validator rejects these combinations.
+Both variants normalize advantages over valid response tokens across the entire training batch, including all data-parallel ranks. Prompt tokens, padding, and masked tokens are excluded. Longer responses contribute more tokens to these statistics, while the loss is averaged within each response and then across responses.
+
+## Quick Start
+
+The [one-GPU recipe](../../../examples/algorithms/run-qwen3-0.6B-1xgpu-reinforce-plus-plus.sh) uses Qwen3-0.6B with the `math` reward. Complete [Installation](./installation.md) in a CUDA GPU training environment and prepare:
+
+- A Hugging Face Qwen3-0.6B checkpoint with its tokenizer. The recipe also uses it as the reference policy.
+- A training Parquet file with `question` and `answer` columns. Store only the final answer in `answer`, such as `42`, rather than the full GSM8K solution rationale.
+- A writable output directory. Checkpoints are loaded from and saved to its `actor` subdirectory, so use a new directory for a new run. Mount the output on persistent storage when using a container.
+
+::: warning Use a dedicated training environment
+`ray-job.sh` cleans up previous Relax/SGLang workers and training jobs, shuts down Ray Serve applications, and removes existing placement groups. Do not run it on a shared host or Ray cluster with other workloads. Avoid launching the recipe directly: its default local startup also stops Ray and cleans up Python processes.
 :::
 
-## Run the one-GPU example
-
-The [Qwen3-0.6B recipe](../../../examples/algorithms/run-qwen3-0.6B-1xgpu-reinforce-plus-plus.sh) sets the model, resource, and algorithm arguments. Run it from the repository root.
-
-### 1. Prepare the environment and inputs
-
-Complete [Installation](./installation.md). The example requires a CUDA GPU and the Megatron, Megatron Bridge, SGLang, and Ray dependencies. Choose an image that supports your GPU. One GPU is the recipe's resource setting, not a memory-capacity guarantee.
-
-Prepare these local inputs. The recipe does not download the model or prepare dataset labels:
-
-- A Hugging Face Qwen3-0.6B checkpoint, including its tokenizer. The recipe also uses this checkpoint as the reference policy.
-- A training Parquet file with `question` and `answer` columns. `question` contains the prompt. `answer` contains the final answer expected by the `math` reward, not the full solution rationale. For example, store `42`, not `reasoning ... #### 42`.
-- A writable output directory. Use a new directory for a new run. The recipe uses its `actor` subdirectory for both checkpoint loading and saving.
-
-Replace the paths below with your paths. Keep model, data, and output files visible to the Ray workers. If you use a container, mount the output directory on persistent storage.
+The following assumes that your training container exposes one GPU and Ray is not yet running. Run from the repository root, replacing the paths with local paths accessible to the Ray workers:
 
 ```bash
 export MODEL_PATH=/path/to/Qwen3-0.6B
 export PROMPT_DATA=/path/to/gsm8k/main/train_clean.parquet
 export OUTPUT_DIR=/path/to/runs/reinforce-plus-plus
-```
 
-### 2. Start a dedicated Ray runtime
-
-::: danger Use a dedicated environment
-The launch helpers clean up previous training workers, jobs, Ray Serve applications, and placement groups. The recipe's direct local launch can also stop Ray and kill Python processes. Do not run these helpers on a shared host or cluster that has other workloads.
-:::
-
-Expose only the GPU assigned to this run in a dedicated training container. `--num-gpus=1` declares Ray capacity; it does not hide other GPUs. Start a single-node Ray runtime:
-
-```bash
 ray start --head --num-gpus=1 --dashboard-host=127.0.0.1 --dashboard-port=8265
-```
 
-If your launcher has already started a dedicated Ray runtime, skip this command. The following command assumes that its Jobs API is reachable at `http://127.0.0.1:8265`. Set `RAY_ADDRESS` to your Jobs API address if it differs.
-
-### 3. Submit training
-
-Use the [Ray job helper](../../../scripts/entrypoint/ray-job.sh) to set the worker environment and submit the recipe:
-
-```bash
 ADVANTAGE_ESTIMATOR=reinforce_plus_plus \
 bash scripts/entrypoint/ray-job.sh \
   examples/algorithms/run-qwen3-0.6B-1xgpu-reinforce-plus-plus.sh
 ```
 
-To run the baseline variant, use a separate output directory:
+Skip `ray start` if a dedicated Ray runtime is already running. Set `RAY_ADDRESS` if its Jobs API is not at `http://127.0.0.1:8265`. `--num-gpus=1` declares Ray resource capacity; it does not control GPU visibility.
+
+To run the baseline, change `ADVANTAGE_ESTIMATOR` and use a separate output directory:
 
 ```bash
 OUTPUT_DIR=/path/to/runs/reinforce-plus-plus-baseline \
@@ -72,99 +50,91 @@ bash scripts/entrypoint/ray-job.sh \
   examples/algorithms/run-qwen3-0.6B-1xgpu-reinforce-plus-plus.sh
 ```
 
-The recipe submits `python3 -m relax.entrypoints.train`. It selects synchronous colocate mode, uses one GPU for the Actor and Rollout, and sets context parallelism to 1. It enables the metrics service and writes the submission log under `OUTPUT_DIR/logs`.
+The recipe uses synchronous colocate training: Actor and Rollout take turns on one GPU, with context parallelism set to 1.
 
-## Change the recipe settings
+## Configuration
 
-Set environment variables before the recipe command. These defaults belong to the example script. They are not the command-line parser defaults.
+### Recipe Settings
 
-| Environment variable | Recipe default | Action |
+Override settings with environment variables, for example by adding `NUM_ROLLOUT=100 LR=5e-7` before the launch command. The table lists common settings with defaults from the recipe, not the Relax argument parser.
+
+| Environment variable | Recipe default | Description |
 |---|---|---|
-| `ADVANTAGE_ESTIMATOR` | `reinforce_plus_plus` | Select `reinforce_plus_plus`, `reinforce_plus_plus_baseline`, or `grpo`. |
-| `NUM_ROLLOUT` | `50` | Set the number of rollout iterations. |
-| `ROLLOUT_BATCH_SIZE` | `4` | Set the number of prompts per rollout. |
-| `N_SAMPLES_PER_PROMPT` | `8` | Set responses per prompt. The baseline requires more than 1. |
-| `GLOBAL_BATCH_SIZE` | `32` | Set responses per training batch. The default uses all `4 × 8` responses in one batch. |
-| `ROLLOUT_MAX_RESPONSE_LEN` | `1024` | Set the response-token limit for training and optional evaluation. |
-| `MAX_TOKENS_PER_GPU` | `4096` | Set the dynamic training token budget per GPU. |
-| `LOG_PROBS_MAX_TOKENS_PER_GPU` | `4096` | Set the log-probability forward-pass token budget per GPU. |
-| `SGLANG_MEM_FRACTION_STATIC` | `0.45` | Set SGLang's static GPU-memory fraction. |
-| `LR` | `1e-6` | Set the learning rate. |
-| `SEED` | `42` | Set the random seed. It does not guarantee identical generations. |
-| `KL_COEF` | `0.01` | Set the REINFORCE++ reward penalty. Must be positive. The baseline ignores this variable and sets `--kl-coef 0`. |
-| `KL_LOSS_COEF` | `0.01` | Set the baseline's separate KL-loss coefficient. Must be positive. REINFORCE++ does not use this variable. |
-| `REWARD_NUM_WORKERS` / `REWARD_MAX_CONCURRENCY` | `4` / `16` | Set reward-worker count and request concurrency. Match them to available CPU resources. |
-| `USE_HEALTH_CHECK` | `1` | Enable health checks. Accepts `1`, `0`, `true`, or `false`. |
-| `SAVE_INTERVAL` | `50` | Set checkpoint-save frequency in rollout iterations. |
+| `NUM_ROLLOUT` | `50` | Number of rollout iterations |
+| `ROLLOUT_BATCH_SIZE` | `4` | Prompts per rollout |
+| `N_SAMPLES_PER_PROMPT` | `8` | Responses per prompt; must exceed 1 for the baseline |
+| `GLOBAL_BATCH_SIZE` | `32` | Responses per training batch |
+| `ROLLOUT_MAX_RESPONSE_LEN` | `1024` | Response-token limit for training and evaluation |
+| `LR` | `1e-6` | Learning rate |
+| `KL_COEF` | `0.01` | REINFORCE++ reward-side KL coefficient; unused by the baseline |
+| `KL_LOSS_COEF` | `0.01` | Baseline's separate KL-loss coefficient; unused by REINFORCE++ |
+| `MAX_TOKENS_PER_GPU` / `LOG_PROBS_MAX_TOKENS_PER_GPU` | `4096` / `4096` | Dynamic training / log-probability forward-pass token budget per GPU |
+| `SGLANG_MEM_FRACTION_STATIC` | `0.45` | SGLang's static GPU-memory fraction |
 
-When you change prompt or sample counts, keep `GLOBAL_BATCH_SIZE = ROLLOUT_BATCH_SIZE × N_SAMPLES_PER_PROMPT` to retain one training batch per rollout in this example. Other batch layouts must keep prompt groups complete and satisfy the training minibatch checks.
+By default, each rollout produces `4 × 8 = 32` responses for one training batch. Keep `GLOBAL_BATCH_SIZE = ROLLOUT_BATCH_SIZE × N_SAMPLES_PER_PROMPT` when changing batch sizes to retain this setup.
 
-Evaluation is off unless you set `EVAL_DATA` to an evaluation Parquet file with the same columns and final-answer labels. When enabled, `EVAL_INTERVAL` defaults to `10` and `N_SAMPLES_PER_EVAL_PROMPT` defaults to `4`. The recipe skips evaluation before training.
+Evaluation is enabled only when you set `EVAL_DATA`, using the same data format as training. It runs every 10 rollout iterations with 4 responses per prompt and skips evaluation before training. Override these settings with `EVAL_INTERVAL` and `N_SAMPLES_PER_EVAL_PROMPT`. Checkpoints are saved every 50 rollout iterations, configurable through `SAVE_INTERVAL`.
 
-## Use the variants in your own training script
+### Using Your Own Script
 
-Keep your model, dataset, resource, and launch arguments. Add **one** of the following sets of algorithm arguments. Both require `--colocate --context-parallel-size 1` and a reference checkpoint supplied by `--ref-load`.
+Keep your model, data, and resource configuration, and replace the algorithm arguments with one of the sets below. Both variants currently require Megatron synchronous colocate training, `--colocate --context-parallel-size 1`, and `--ref-load <reference-checkpoint>`. They do not support `--fully-async`, `--hybrid`, or `--calculate-per-token-loss`.
 
-### REINFORCE++ arguments
+**REINFORCE++:**
 
-```text
---advantage-estimator reinforce_plus_plus
---normalize-advantages
---gamma 1.0
---kl-coef 0.01
---kl-loss-type k1
---kl-loss-coef 0
+```bash
+ALGORITHM_ARGS=(
+  --advantage-estimator reinforce_plus_plus
+  --normalize-advantages
+  --gamma 1.0
+  --kl-coef 0.01
+  --kl-loss-type k1
+  --kl-loss-coef 0
+)
 ```
 
-Do not add `--use-kl-loss`. The validator requires a positive `--kl-coef`, k1, and no separate KL loss.
+This uses the k1 penalty `-kl_coef × (log_prob_old - log_prob_ref)`. The final reward is added to the last valid response token, and rewards are accumulated backwards; `gamma=1.0` means no discounting. `--kl-coef` must be positive, and `--use-kl-loss` must remain off.
 
-### REINFORCE++-baseline arguments
+**REINFORCE++-baseline:**
 
-```text
---advantage-estimator reinforce_plus_plus_baseline
---normalize-advantages
---n-samples-per-prompt 8
---kl-coef 0
---use-kl-loss
---kl-loss-type k2
---kl-loss-coef 0.01
+```bash
+ALGORITHM_ARGS=(
+  --advantage-estimator reinforce_plus_plus_baseline
+  --normalize-advantages
+  --n-samples-per-prompt 8
+  --kl-coef 0
+  --use-kl-loss
+  --kl-loss-type k2
+  --kl-loss-coef 0.01
+)
 ```
 
-Keep complete response groups for each prompt. Do not use `--disable-rewards-normalization`, `--custom-reward-post-process-path`, `--agentic-custom-advantage-path`, or `--use-unbiased-kl` with the baseline. The validator rejects these options.
+This broadcasts each group-centered reward to the response tokens and applies the separate k2 penalty `0.5 × (log_prob_current - log_prob_ref)²`. `--kl-loss-coef` must be positive. Keep complete response groups for each prompt; missing responses or inconsistent group identifiers produce an incomplete-group error.
 
-The parser defaults are `--advantage-estimator grpo`, normalization off, `--n-samples-per-prompt 1`, `--gamma 1.0`, `--kl-coef 0`, `--kl-loss-type k1`, `--kl-loss-coef 0`, and separate KL loss off. Selecting an estimator alone does not supply its required settings. See [Configuration](./configuration.md) for the full argument list.
+The baseline relies on built-in group-mean reward processing, so it cannot use `--disable-rewards-normalization`, `--custom-reward-post-process-path`, or `--agentic-custom-advantage-path`. It also does not support `--use-unbiased-kl`.
 
-## Understand the training signal
+Relax defaults to GRPO, with advantage normalization off and both KL coefficients set to zero. Changing only `--advantage-estimator` does not supply the required settings, so replace the algorithm arguments together when adapting an existing script. See [Configuration](./configuration.md) for the full option list.
 
-For REINFORCE++, each valid response token receives the penalty
-`-kl_coef × (log_prob_old - log_prob_ref)`. Relax adds the final reward to the last valid response token. It then accumulates rewards backwards to form the return. The example uses `gamma=1.0`, so it does not discount later rewards.
+## Monitoring and Common Problems
 
-For the baseline, Relax subtracts the same-prompt mean reward from each response reward. It copies this value to the valid response tokens. KL does not enter this advantage. The separate k2 loss uses `0.5 × (log_prob_current - log_prob_ref)²`.
+TensorBoard events are written to `OUTPUT_DIR/actor/tensorboard_log`, unless overridden by `TENSORBOARD_DIR`. Submission logs are saved under `OUTPUT_DIR/logs`. Assess training with evaluation rewards, `rollout/response_len/mean`, and `rollout/truncated_ratio`, rather than loss alone. If responses often reach the length limit, increase `ROLLOUT_MAX_RESPONSE_LEN` if memory permits.
 
-Both variants normalize raw advantages over valid response tokens across data-parallel ranks. Relax subtracts the global token mean and divides by `sqrt(max(population_variance, 1e-8))`. Prompt tokens, padding, and masked response tokens do not enter these statistics. Longer responses have more weight in the normalization because they contain more tokens.
+### Rewards or Advantages Stay at Zero
 
-A constant raw advantage population becomes zero after normalization. An entirely masked global batch is an error. For the policy loss and the baseline's KL loss, Relax averages within each response and then across responses. This is why `--calculate-per-token-loss` is not supported.
+Check labels and generated responses first. The `math` reward extracts the final answer from `\boxed{...}` and returns zero if extraction fails. Labels should contain final answers, not full solution rationales.
 
-## Monitor and troubleshoot
+For the baseline, equal rewards within a prompt group become zero advantages after subtracting the group mean. That group has no relative training signal; changing normalization is not the first remedy. Inspect `rollout/reinforce_pp_advantage_raw_std` and `rollout/reinforce_pp_zero_variance`. Constant raw advantages normalize to zero, while a batch with no valid tokens raises an error.
 
-The recipe's TensorBoard events use `OUTPUT_DIR/actor/tensorboard_log` unless you override `TENSORBOARD_DIR`. Submission logs use `OUTPUT_DIR/logs`.
+### Pending Actors or GPU Out-of-Memory Errors
 
-| Symptom or metric | What to check or do |
-|---|---|
-| Startup rejects the configuration | Check the mode and variant-specific arguments above. Do not combine reward-side KL and a separate KL loss. |
-| Baseline reports an incomplete reward group | Check that each prompt retains exactly `N_SAMPLES_PER_PROMPT` responses with the same group identifier. Do not drop individual responses before group reward processing. |
-| Baseline advantages are zero | Check the raw rewards within each prompt group. Equal rewards give no relative training signal. Check labels and reward calculation before changing normalization. |
-| Reward is always zero | Check that the generated response contains a final answer in `\boxed{...}`. The `math` reward returns zero if it cannot extract the answer. Use final-answer labels, not full GSM8K solution rationales. |
-| Ray actors stay pending | Use `ray status` to check available GPU and CPU resources. The recipe needs one visible GPU and CPU capacity for its services and reward workers. |
-| GPU runs out of memory | Reduce the training or log-probability token budget. Adjust the SGLang memory fraction if inference allocation is the cause. See [OOM Troubleshooting](./oom-troubleshooting.md). |
-| Responses often reach the token limit | Check `rollout/response_len/mean` and `rollout/truncated_ratio`. Increase `ROLLOUT_MAX_RESPONSE_LEN` only if your memory budget permits. |
-| `train/ppo_kl` is zero | This metric compares the old and current policies. It does not measure reference-policy regularization. |
-| Need to inspect REINFORCE++ regularization | Compare same-step `rollout/returns` and `rollout/raw_reward` summaries as a diagnostic, not a direct reference-KL estimate. The k1 penalty is included in returns, not a separate `train/kl_loss`. |
-| Need to inspect baseline regularization | Read `train/kl_loss`. Relax adds this k2 penalty to total loss after multiplying by `--kl-loss-coef`. |
+Use `ray status` to check GPU availability and CPU capacity for services and reward workers. The recipe defaults to 4 reward workers and up to 16 concurrent requests; adjust them with `REWARD_NUM_WORKERS` and `REWARD_MAX_CONCURRENCY`.
 
-The `rollout/reinforce_pp_advantage_raw_std`, `rollout/reinforce_pp_advantage_normalized_std`, `rollout/reinforce_pp_valid_token_count`, and `rollout/reinforce_pp_zero_variance` metrics help diagnose the normalization population. Do not treat a single loss or KL value as a model-quality score. Use evaluation rewards as well.
+For OOM during training or log-probability computation, reduce the corresponding token budget. For inference allocation issues, adjust `SGLANG_MEM_FRACTION_STATIC`. See [OOM Troubleshooting](./oom-troubleshooting.md) for details.
 
-## Next steps
+### Which KL Metric Should I Read?
+
+`train/ppo_kl` compares the old and current policies, not the policy and reference model. For the baseline, `train/kl_loss` records the reference penalty before it is multiplied by `--kl-loss-coef` and added to the total loss. REINFORCE++ includes its penalty in returns, so it has no separate `train/kl_loss`. `rollout/returns` and `rollout/raw_reward` can help with diagnosis, but their difference is not a direct estimate of reference-policy KL.
+
+## Related Documentation
 
 - [Dataset Design](./dataset-design.md): prepare prompts and labels.
 - [Customize Training](./customize-training.md): adapt the training script.

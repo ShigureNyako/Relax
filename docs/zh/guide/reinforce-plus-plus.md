@@ -1,69 +1,47 @@
-# 使用 REINFORCE++ 训练
+# REINFORCE++ 训练
 
-REINFORCE++ 不训练 Critic 模型。Relax 提供两个变体。两者都使用带裁剪的策略损失，并在同步训练批次的有效回答 token 上归一化优势值（advantage）。优势值告诉策略应强化哪些生成 token。
+REINFORCE++ 是一种不需要 Critic 的策略梯度算法。它根据奖励计算优势值（advantage），再使用 PPO 风格的裁剪目标更新策略。已有 GRPO 训练配置时，可以复用 Actor/Rollout 服务拓扑，替换算法参数。
 
-## 选择变体
+## 概述
 
-| 变体 | 训练信号 | 参考策略惩罚 | 适用场景 |
-|---|---|---|---|
-| `reinforce_plus_plus` | 最终奖励加上累积的 token 惩罚 | 在奖励中加入 k1 KL 惩罚 | 希望 token 级参考策略惩罚影响回报值（return）时使用。 |
-| `reinforce_plus_plus_baseline` | 每个奖励减去同一提示词的平均奖励 | 独立的 k2 KL 损失 | 希望比较同一提示词的多个回答，并让参考策略惩罚不进入优势值时使用。 |
+Relax 提供两个变体，主要区别是如何计算优势值，以及如何约束策略偏离参考模型：
 
-baseline 的均值包含当前回答，不是排除当前回答的均值。与 GRPO 默认的奖励处理不同，该变体不除以组内标准差。其他选择请参见[算法参考](../examples/algorithms.md)。
+- **REINFORCE++**（`reinforce_plus_plus`）：将最终奖励与逐 token 的 k1 KL 惩罚合并，再累积得到各 token 的回报值（return）。这样，参考策略惩罚会参与优势值计算。
+- **REINFORCE++-baseline**（`reinforce_plus_plus_baseline`）：为同一提示词生成多个回答，用每个回答的奖励减去组内平均奖励作为优势值。参考策略惩罚通过独立的 k2 KL 损失加入，不影响优势值。
 
-两种变体都不保证比 GRPO 获得更高奖励。请在你的模型和数据上评估效果。
+baseline 的组均值包含当前回答；它既不像 RLOO 那样排除当前回答，也不像 GRPO 那样除以组内标准差。不同算法的对比见[算法参考](../examples/algorithms.md)。
 
-::: warning 支持的训练模式
-使用 Megatron 后端和同步 colocate 训练（`--colocate`），让训练和生成共享 GPU。设置 `--context-parallel-size 1`。不要启用 `--fully-async`、`--hybrid` 或 `--calculate-per-token-loss`。参数校验会拒绝这些组合。
+两种变体都会在整个训练批次的有效回答 token 上归一化优势值，包括跨数据并行 rank 的统计。提示词、padding 和被 mask 的 token 不参与统计，较长回答因 token 更多而占更大权重。损失则先在每个回答内求均值，再跨回答求均值。
+
+## 快速开始
+
+[单 GPU 示例](../../../examples/algorithms/run-qwen3-0.6B-1xgpu-reinforce-plus-plus.sh)使用 Qwen3-0.6B 和 `math` 奖励函数。先完成[安装](./installation.md)，准备带 CUDA GPU 的训练环境，以及以下输入：
+
+- Hugging Face 格式的 Qwen3-0.6B checkpoint 和 tokenizer；示例也用它作为参考模型。
+- 包含 `question`、`answer` 列的训练 Parquet 文件。`answer` 只保存最终答案，例如 `42`，不要直接使用 GSM8K 的完整解题过程。
+- 可写的输出目录。脚本从其 `actor` 子目录加载和保存 checkpoint，因此新任务应使用新目录；在容器内运行时，将输出挂载到持久存储。
+
+::: warning 使用独占训练环境
+`ray-job.sh` 会清理旧的 Relax/SGLang worker 和训练作业，关闭 Ray Serve 应用，并移除已有 placement group。不要在有其他任务的共享主机或 Ray 集群上运行。也不要直接启动示例脚本：它默认走本地启动流程，会停止 Ray 并清理 Python 进程。
 :::
 
-## 运行单 GPU 示例
-
-[Qwen3-0.6B 示例脚本](../../../examples/algorithms/run-qwen3-0.6B-1xgpu-reinforce-plus-plus.sh)已设置模型、资源和算法参数。请从仓库根目录运行。
-
-### 1. 准备环境和输入
-
-先完成[安装](./installation.md)。示例需要 CUDA GPU，以及 Megatron、Megatron Bridge、SGLang 和 Ray 依赖。请选择支持你的 GPU 的镜像。单 GPU 是脚本的资源设置，不代表任意显存容量都能运行。
-
-准备以下本地输入。脚本不会下载模型，也不会处理数据集标签：
-
-- Hugging Face 格式的 Qwen3-0.6B checkpoint，包含 tokenizer。脚本也将该 checkpoint 用作参考策略。
-- 包含 `question` 和 `answer` 列的训练 Parquet 文件。`question` 是提示词。`answer` 是 `math` 奖励函数所需的最终答案，不是完整解题过程。例如，保存 `42`，而不是 `reasoning ... #### 42`。
-- 可写的输出目录。新训练使用新目录。脚本用其 `actor` 子目录加载和保存 checkpoint。
-
-将下面的路径替换为你的路径。确保 Ray worker 能访问模型、数据和输出文件。如果使用容器，请将输出目录挂载到持久存储。
+下面假设训练容器只暴露一张 GPU，且尚未启动 Ray。从仓库根目录运行，将路径替换为本地路径，并确保 Ray worker 能访问这些文件：
 
 ```bash
 export MODEL_PATH=/path/to/Qwen3-0.6B
 export PROMPT_DATA=/path/to/gsm8k/main/train_clean.parquet
 export OUTPUT_DIR=/path/to/runs/reinforce-plus-plus
-```
 
-### 2. 启动专用 Ray 运行环境
-
-::: danger 使用专用环境
-启动脚本会清理之前的训练 worker、作业、Ray Serve 应用和 placement group。直接运行示例时，本地启动流程还可能停止 Ray 并终止 Python 进程。不要在有其他工作负载的共享主机或集群上运行这些脚本。
-:::
-
-让专用训练容器只看到分配给本次训练的 GPU。`--num-gpus=1` 声明 Ray 的资源容量，不会隐藏其他 GPU。启动单节点 Ray：
-
-```bash
 ray start --head --num-gpus=1 --dashboard-host=127.0.0.1 --dashboard-port=8265
-```
 
-如果启动器已准备好专用 Ray 环境，跳过此命令。下一步假设 Jobs API 地址是 `http://127.0.0.1:8265`。地址不同时，将 `RAY_ADDRESS` 设置为你的 Jobs API 地址。
-
-### 3. 提交训练
-
-用 [Ray 作业启动脚本](../../../scripts/entrypoint/ray-job.sh)设置 worker 环境并提交示例：
-
-```bash
 ADVANTAGE_ESTIMATOR=reinforce_plus_plus \
 bash scripts/entrypoint/ray-job.sh \
   examples/algorithms/run-qwen3-0.6B-1xgpu-reinforce-plus-plus.sh
 ```
 
-运行 baseline 变体时，使用另一个输出目录：
+已有专用 Ray 环境时，跳过 `ray start`；Jobs API 不在 `http://127.0.0.1:8265` 时，设置 `RAY_ADDRESS`。`--num-gpus=1` 只声明 Ray 的资源容量，不控制 GPU 可见性。
+
+要运行 baseline，换用另一个输出目录，并修改 `ADVANTAGE_ESTIMATOR`：
 
 ```bash
 OUTPUT_DIR=/path/to/runs/reinforce-plus-plus-baseline \
@@ -72,98 +50,91 @@ bash scripts/entrypoint/ray-job.sh \
   examples/algorithms/run-qwen3-0.6B-1xgpu-reinforce-plus-plus.sh
 ```
 
-脚本提交 `python3 -m relax.entrypoints.train`。它选择同步 colocate 模式，让 Actor 和 Rollout 使用一张 GPU，并将上下文并行度设为 1。脚本启用指标服务，将提交日志写入 `OUTPUT_DIR/logs`。
+示例使用同步 colocate 模式，Actor 与 Rollout 分时共用一张 GPU，上下文并行度为 1。
 
-## 调整示例设置
+## 配置
 
-在运行命令前设置环境变量。下表默认值来自示例脚本，不是命令行参数解析器的默认值。
+### 调整示例脚本
 
-| 环境变量 | 示例默认值 | 用途 |
+通过环境变量调整示例，例如在启动命令前设置 `NUM_ROLLOUT=100 LR=5e-7`。下表列出常用设置，默认值来自示例脚本，而不是 Relax 参数解析器。
+
+| 环境变量 | 示例默认值 | 说明 |
 |---|---|---|
-| `ADVANTAGE_ESTIMATOR` | `reinforce_plus_plus` | 选择 `reinforce_plus_plus`、`reinforce_plus_plus_baseline` 或 `grpo`。 |
-| `NUM_ROLLOUT` | `50` | 设置 rollout 迭代次数。 |
-| `ROLLOUT_BATCH_SIZE` | `4` | 设置每次 rollout 的提示词数。 |
-| `N_SAMPLES_PER_PROMPT` | `8` | 设置每个提示词的回答数。baseline 要求大于 1。 |
-| `GLOBAL_BATCH_SIZE` | `32` | 设置每个训练批次的回答数。默认将 `4 × 8` 个回答放入一个批次。 |
-| `ROLLOUT_MAX_RESPONSE_LEN` | `1024` | 设置训练和可选评测的回答 token 上限。 |
-| `MAX_TOKENS_PER_GPU` | `4096` | 设置每张 GPU 的动态训练 token 预算。 |
-| `LOG_PROBS_MAX_TOKENS_PER_GPU` | `4096` | 设置每张 GPU 计算 log probability 的前向 token 预算。 |
-| `SGLANG_MEM_FRACTION_STATIC` | `0.45` | 设置 SGLang 的静态显存比例。 |
-| `LR` | `1e-6` | 设置学习率。 |
-| `SEED` | `42` | 设置随机种子。不保证生成结果完全一致。 |
-| `KL_COEF` | `0.01` | 设置 REINFORCE++ 的奖励惩罚系数，必须为正。baseline 忽略此变量，使用 `--kl-coef 0`。 |
-| `KL_LOSS_COEF` | `0.01` | 设置 baseline 的独立 KL 损失系数，必须为正。REINFORCE++ 不使用此变量。 |
-| `REWARD_NUM_WORKERS` / `REWARD_MAX_CONCURRENCY` | `4` / `16` | 设置奖励 worker 数和请求并发数。按可用 CPU 资源调整。 |
-| `USE_HEALTH_CHECK` | `1` | 启用健康检查。可用值为 `1`、`0`、`true`、`false`。 |
-| `SAVE_INTERVAL` | `50` | 设置 checkpoint 保存间隔，单位是 rollout 迭代。 |
+| `NUM_ROLLOUT` | `50` | rollout 迭代次数 |
+| `ROLLOUT_BATCH_SIZE` | `4` | 每次 rollout 的提示词数 |
+| `N_SAMPLES_PER_PROMPT` | `8` | 每个提示词的回答数；baseline 必须大于 1 |
+| `GLOBAL_BATCH_SIZE` | `32` | 每个训练批次的回答数 |
+| `ROLLOUT_MAX_RESPONSE_LEN` | `1024` | 训练和评测的回答 token 上限 |
+| `LR` | `1e-6` | 学习率 |
+| `KL_COEF` | `0.01` | REINFORCE++ 的奖励 KL 系数；baseline 不使用此变量 |
+| `KL_LOSS_COEF` | `0.01` | baseline 的独立 KL 损失系数；REINFORCE++ 不使用此变量 |
+| `MAX_TOKENS_PER_GPU` / `LOG_PROBS_MAX_TOKENS_PER_GPU` | `4096` / `4096` | 每张 GPU 的动态训练 / log probability 前向 token 预算 |
+| `SGLANG_MEM_FRACTION_STATIC` | `0.45` | SGLang 的静态显存比例 |
 
-修改提示词数或回答数时，保持 `GLOBAL_BATCH_SIZE = ROLLOUT_BATCH_SIZE × N_SAMPLES_PER_PROMPT`，即可沿用本示例每次 rollout 对应一个训练批次的设置。其他批次设置须保留完整提示词组，并满足训练小批次校验。
+示例默认每次采样 `4 × 8 = 32` 个回答，用一个训练批次完成更新。调整批量时，保持 `GLOBAL_BATCH_SIZE = ROLLOUT_BATCH_SIZE × N_SAMPLES_PER_PROMPT` 即可沿用这一设置。
 
-默认不评测。将 `EVAL_DATA` 设置为评测 Parquet 文件后才启用评测。该文件须使用相同列名和最终答案标签。启用后，`EVAL_INTERVAL` 默认为 `10`，`N_SAMPLES_PER_EVAL_PROMPT` 默认为 `4`。脚本跳过训练前评测。
+设置 `EVAL_DATA` 后才启用评测，数据格式与训练数据相同。评测默认每 10 次 rollout 进行一次，每个提示词生成 4 个回答，不在训练前评测；可通过 `EVAL_INTERVAL` 和 `N_SAMPLES_PER_EVAL_PROMPT` 调整。checkpoint 默认每 50 次 rollout 保存一次，可通过 `SAVE_INTERVAL` 调整。
 
-## 在自己的训练脚本中使用
+### 在自己的脚本中启用
 
-保留你的模型、数据集、资源和启动参数。选择下面**一组**算法参数。两组都需要 `--colocate --context-parallel-size 1`，并通过 `--ref-load` 指定参考 checkpoint。
+保留模型、数据和资源配置，将算法参数替换为下面两组之一。当前仅支持 Megatron 同步 colocate 训练，需要 `--colocate --context-parallel-size 1` 和 `--ref-load <参考模型路径>`，不支持 `--fully-async`、`--hybrid` 或 `--calculate-per-token-loss`。
 
-### REINFORCE++ 参数
+**REINFORCE++：**
 
-```text
---advantage-estimator reinforce_plus_plus
---normalize-advantages
---gamma 1.0
---kl-coef 0.01
---kl-loss-type k1
---kl-loss-coef 0
+```bash
+ALGORITHM_ARGS=(
+  --advantage-estimator reinforce_plus_plus
+  --normalize-advantages
+  --gamma 1.0
+  --kl-coef 0.01
+  --kl-loss-type k1
+  --kl-loss-coef 0
+)
 ```
 
-不要添加 `--use-kl-loss`。参数校验要求 `--kl-coef` 为正、使用 k1，且不启用独立 KL 损失。
+这里使用 k1 KL 惩罚，即 `-kl_coef × (log_prob_old - log_prob_ref)`。最终奖励加到最后一个有效回答 token，再从后向前累积；`gamma=1.0` 表示不打折。`--kl-coef` 必须为正，且不能同时启用 `--use-kl-loss`。
 
-### REINFORCE++-baseline 参数
+**REINFORCE++-baseline：**
 
-```text
---advantage-estimator reinforce_plus_plus_baseline
---normalize-advantages
---n-samples-per-prompt 8
---kl-coef 0
---use-kl-loss
---kl-loss-type k2
---kl-loss-coef 0.01
+```bash
+ALGORITHM_ARGS=(
+  --advantage-estimator reinforce_plus_plus_baseline
+  --normalize-advantages
+  --n-samples-per-prompt 8
+  --kl-coef 0
+  --use-kl-loss
+  --kl-loss-type k2
+  --kl-loss-coef 0.01
+)
 ```
 
-保留每个提示词的完整回答组。baseline 不允许使用 `--disable-rewards-normalization`、`--custom-reward-post-process-path`、`--agentic-custom-advantage-path` 或 `--use-unbiased-kl`。参数校验会拒绝这些选项。
+这组参数将组内奖励差复制到回答 token，并用独立的 k2 惩罚 `0.5 × (log_prob_current - log_prob_ref)²` 约束策略。`--kl-loss-coef` 必须为正。每个提示词须保留完整的回答组；缺少回答或组标识不一致时，会报奖励组不完整。
 
-解析器默认使用 `--advantage-estimator grpo`，关闭优势值归一化，每个提示词生成 1 个回答，`--gamma 1.0`，`--kl-coef 0`，`--kl-loss-type k1`，`--kl-loss-coef 0`，关闭独立 KL 损失。只选择 estimator 不会自动补齐所需设置。完整参数列表请参见[配置说明](./configuration.md)。
+baseline 依赖内置的组均值处理，因此不能使用 `--disable-rewards-normalization`、`--custom-reward-post-process-path` 或 `--agentic-custom-advantage-path`，也不支持 `--use-unbiased-kl`。
 
-## 理解训练信号
+Relax 默认选择 GRPO，关闭优势值归一化，两个 KL 系数均为零。只修改 `--advantage-estimator` 不会自动补齐上述设置，迁移已有脚本时应一起替换算法参数。完整选项见[配置说明](./configuration.md)。
 
-REINFORCE++ 为每个有效回答 token 添加惩罚：`-kl_coef × (log_prob_old - log_prob_ref)`。Relax 将最终奖励加到最后一个有效回答 token，然后从后向前累积奖励，得到回报值。示例使用 `gamma=1.0`，不对后续奖励打折。
+## 监控与常见问题
 
-baseline 从每个回答的奖励中减去同一提示词的平均奖励，再将该值复制到有效回答 token。KL 不进入此优势值。独立 k2 损失使用 `0.5 × (log_prob_current - log_prob_ref)²`。
+示例将 TensorBoard event 写入 `OUTPUT_DIR/actor/tensorboard_log`，可用 `TENSORBOARD_DIR` 覆盖；提交日志保存在 `OUTPUT_DIR/logs`。评估训练效果时，结合评测奖励、`rollout/response_len/mean` 和 `rollout/truncated_ratio`，而不是只看损失。回答经常达到长度上限时，可在显存允许的情况下增大 `ROLLOUT_MAX_RESPONSE_LEN`。
 
-两个变体都在跨数据并行 rank 的有效回答 token 上归一化原始优势值。Relax 先减去全局 token 均值，再除以 `sqrt(max(population_variance, 1e-8))`。提示词 token、padding 和被 mask 的回答 token 不参与统计。较长回答包含更多 token，因此在归一化统计中的权重更大。
+### 奖励或优势值一直为零
 
-原始优势值全部相同时，归一化结果为零。全局批次没有有效 token 时会报错。策略损失和 baseline 的 KL 损失先在每个回答内求均值，再跨回答求均值。因此不能启用 `--calculate-per-token-loss`。
+先检查标签和生成回答。`math` 奖励函数从回答中的 `\boxed{...}` 提取最终答案，无法提取时返回零；标签应是最终答案，而非完整解题过程。
 
-## 监控与排障
+如果 baseline 同一组的回答奖励都相同，减去组均值后优势值就是零。这表示该组没有相对训练信号，不必先改归一化参数。可查看 `rollout/reinforce_pp_advantage_raw_std` 和 `rollout/reinforce_pp_zero_variance`；原始优势值全部相同时，归一化结果为零，整个批次没有有效 token 时则会报错。
 
-除非设置 `TENSORBOARD_DIR`，示例的 TensorBoard event 写入 `OUTPUT_DIR/actor/tensorboard_log`。提交日志写入 `OUTPUT_DIR/logs`。
+### 一直等待调度或显存不足
 
-| 症状或指标 | 检查或操作 |
-|---|---|
-| 启动时配置被拒绝 | 检查上文的模式和变体参数。不要同时使用奖励中的 KL 惩罚和独立 KL 损失。 |
-| baseline 报告奖励组不完整 | 检查每个提示词是否保留恰好 `N_SAMPLES_PER_PROMPT` 个回答，且使用相同的组标识。不要在组内奖励处理前丢弃单个回答。 |
-| baseline 优势值为零 | 检查每组的原始奖励。奖励相同时，没有相对训练信号。先检查标签和奖励计算，不要直接修改归一化。 |
-| 奖励始终为零 | 检查生成回答是否包含 `\boxed{...}` 格式的最终答案。`math` 奖励函数无法提取答案时返回零。标签使用最终答案，不要使用 GSM8K 的完整解题过程。 |
-| Ray actor 一直等待调度 | 用 `ray status` 检查可用 GPU 和 CPU 资源。示例需要一张可见 GPU，以及足够运行服务和奖励 worker 的 CPU 资源。 |
-| GPU 显存不足 | 降低训练或 log probability 计算的 token 预算。如果原因是推理侧分配，调整 SGLang 显存比例。参见 [OOM 排查](./oom-troubleshooting.md)。 |
-| 回答经常达到 token 上限 | 检查 `rollout/response_len/mean` 和 `rollout/truncated_ratio`。只有显存预算允许时，才增大 `ROLLOUT_MAX_RESPONSE_LEN`。 |
-| `train/ppo_kl` 为零 | 此指标比较旧策略与当前策略，不衡量参考策略惩罚。 |
-| 检查 REINFORCE++ 的参考策略惩罚 | 比较同一步的 `rollout/returns` 和 `rollout/raw_reward` 汇总作排查参考，不要将差值当作参考策略 KL 的直接估计。k1 惩罚已进入回报值，没有独立的 `train/kl_loss`。 |
-| 检查 baseline 的参考策略惩罚 | 查看 `train/kl_loss`。Relax 将该 k2 惩罚乘以 `--kl-loss-coef` 后加入总损失。 |
+用 `ray status` 检查是否有可用 GPU，以及足够运行服务和奖励 worker 的 CPU 资源。示例默认使用 4 个奖励 worker、最多 16 个并发请求，可用 `REWARD_NUM_WORKERS` 和 `REWARD_MAX_CONCURRENCY` 调整。
 
-`rollout/reinforce_pp_advantage_raw_std`、`rollout/reinforce_pp_advantage_normalized_std`、`rollout/reinforce_pp_valid_token_count` 和 `rollout/reinforce_pp_zero_variance` 可帮助排查归一化统计。不要用单个损失或 KL 值判断模型质量，还应查看评测奖励。
+训练或 log probability 前向阶段 OOM 时，降低对应的 token 预算；推理侧显存不足时，调整 `SGLANG_MEM_FRACTION_STATIC`。具体排查方法见 [OOM 排查](./oom-troubleshooting.md)。
 
-## 下一步
+### 如何查看 KL 惩罚
+
+`train/ppo_kl` 比较旧策略与当前策略，不代表策略与参考模型的差异。baseline 的参考模型惩罚记录在 `train/kl_loss`，乘以 `--kl-loss-coef` 后加入总损失。REINFORCE++ 的惩罚已包含在回报值中，没有独立的 `train/kl_loss`；`rollout/returns` 与 `rollout/raw_reward` 可辅助排查，但二者差值不是参考策略 KL 的直接估计。
+
+## 相关文档
 
 - [数据集设计](./dataset-design.md)：准备提示词和标签。
 - [自定义训练](./customize-training.md)：调整训练脚本。

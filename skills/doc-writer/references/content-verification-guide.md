@@ -123,16 +123,8 @@ Watch for these signs that documentation may be inaccurate:
 
 1. **Trust the source code** — it is the ground truth
 2. **Document what exists** — not what was planned
-3. **Add warnings for known gaps** — use `::: warning` blocks
-4. **Note partial implementations** — if a feature is half-done, say so explicitly
-
-```markdown
-::: warning
-The `batch_mode` parameter is defined in the constructor but not yet 
-fully implemented. Currently, all metrics are sent individually regardless 
-of this setting.
-:::
-```
+3. **Explain known limitations in context** — put them near the affected configuration; reserve warning containers for consequential risks
+4. **Do not publish uncertain claims** — clarify ambiguous source behavior in internal notes before describing it to users
 
 ## Internal Verification Checklist Template
 
@@ -154,7 +146,9 @@ Use verified behavior to explain required settings, limitations, and troubleshoo
 - [ ] All repository paths exist (every file/dir path like `relax/foo/bar.py` or `scripts/training/*/run-*.sh` mentioned in the doc must be confirmed to exist in the repo via `ls` or `read_file`)
 - [ ] English and Chinese versions have identical technical content
 - [ ] All internal links point to existing doc pages
-- [ ] User content explains purpose, when to use, runnable steps, defaults, limitations, and troubleshooting without test/acceptance-report material
-- [ ] Both languages use short sentences, clear actors/actions, and consistent terms; “80% of the way to ASD-STE100” is a clarity goal, not a compliance claim
+- [ ] Relevant repository guides were read for terminology, narration, and level of detail; no report content was copied
+- [ ] User content covers necessary purpose, setup, configuration, limitations, and remedies without forcing each into a separate heading or adding test/acceptance-report material
+- [ ] Both languages read naturally on their own, with context around examples, clear actions, and consistent terms; “80% of the way to ASD-STE100” is a comprehension goal, not a sentence pattern or compliance claim
+- [ ] Repetitive warnings, mechanical lists, internal-facing language, and redundant verification wording have been removed without hiding important risks
 - [ ] Docs build and emitted link/render checks completed; missing hardware validation is reported in the PR, not the user page
 ```
