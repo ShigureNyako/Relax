@@ -1,6 +1,12 @@
 # Doc Page Template
 
-This file provides the standard template for Relax documentation pages. Both English and Chinese versions follow this structure.
+Use this outline to plan a user task, not to fill every heading. Create English pages under `docs/en/` and Chinese pages under `docs/zh/`, with matching technical coverage.
+
+Start with purpose and when to use the feature. Give prerequisites and the smallest runnable steps. Then cover required settings, verified defaults, limitations, troubleshooting, and relevant next steps. Architecture, feature lists, API details, advanced examples, and best practices are optional; include them only when they help users complete the task.
+
+Write short sentences with a clear actor and action. Use consistent terms and numbered instructions in both languages. Aim for “80% of the way to ASD-STE100”; do not claim strict compliance. The placeholders below are not real Relax APIs or executable examples. Replace them with source-verified commands and configuration before publishing.
+
+Do not add test counts, acceptance checklists, training reports, execution logs, or machine traces to the user page. Keep validation evidence in internal notes or the PR. A test result is not a general feature guarantee.
 
 ## English Template
 
@@ -11,7 +17,7 @@ Brief one-line description of the feature.
 
 ## Overview
 
-2-3 paragraph explanation of what this feature does, why it exists, and how it fits into the Relax architecture.
+Briefly explain what the feature does and when the user should use it. State the supported scope without promising results from past experiments.
 
 ## Architecture
 
@@ -36,13 +42,17 @@ Use ASCII art diagrams:
 | **ComponentA** | What it does | How it's implemented |
 | **ComponentB** | What it does | How it's implemented |
 
-## Features
+## Features (optional)
+
+Include only capabilities that the user needs for this task.
 
 1. **Feature A**: Description
 2. **Feature B**: Description
 3. **Feature C**: Description
 
 ## Quick Start
+
+State the environment, input files, permissions, and resources needed before the first command. Warn about destructive launch behavior before users execute it.
 
 ### 1. Setup / Deploy
 
@@ -76,7 +86,11 @@ Or via CLI arguments:
 python train.py --param-a value --param-b 100
 \```
 
-## API Reference
+## Limitations
+
+State unsupported modes, required parameter combinations, and relevant resource constraints verified against the current code.
+
+## API Reference (optional)
 
 ### ClassName
 
@@ -99,7 +113,7 @@ Description of what the method does.
 
 **Returns:** Description of return value.
 
-## Usage Examples
+## Usage Examples (optional)
 
 ### Example 1: Common Scenario
 
@@ -113,7 +127,7 @@ Description of what the method does.
 # More complex usage
 \```
 
-## Best Practices
+## Best Practices (optional)
 
 1. **Practice A**: Explanation
 2. **Practice B**: Explanation
@@ -142,7 +156,7 @@ If symptom occurs:
 
 ## Chinese Template
 
-The Chinese version mirrors the English structure exactly. Key differences:
+The Chinese version mirrors the sections selected for the English page. Keep commands and configuration identical; translate explanations and comments. Apply the same short-sentence, clear-action rules.
 
 ```markdown
 # 功能名称
@@ -151,7 +165,7 @@ The Chinese version mirrors the English structure exactly. Key differences:
 
 ## 概述
 
-2-3 段解释该功能做什么、为什么存在、如何融入 Relax 架构。
+简短说明功能做什么、何时使用。说明支持范围，不把历史实验结果写成效果保证。
 
 ## 架构
 
@@ -159,20 +173,24 @@ The Chinese version mirrors the English structure exactly. Key differences:
 
 \```
 ┌─────────────────┐         ┌─────────────────┐
-│   组件 A        │ ──────> │   组件 B          │
+│   Component A   │ ──────> │   Component B   │
 └─────────────────┘         └────────┬────────┘
                                      │
                             ┌────────▼────────┐
-                            │   组件 C        │
+                            │   Component C   │
                             └─────────────────┘
 \```
 
-## 功能特性
+## 功能特性（可选）
+
+只列出完成当前任务所需的能力。
 
 1. **功能 A**：描述
 2. **功能 B**：描述
 
 ## 快速开始
+
+先说明所需环境、输入文件、权限和资源。执行命令前说明启动过程中的破坏性操作。
 
 ### 1. 部署 / 安装
 
@@ -188,15 +206,19 @@ instance.start()
 
 (同英文版，代码块保持不变，注释翻译为中文)
 
-## API 参考
+## 限制
+
+按当前源码说明不支持的模式、必需的参数组合和相关资源限制。
+
+## API 参考（可选）
 
 (同英文版，签名保持不变，描述翻译为中文)
 
-## 使用示例
+## 使用示例（可选）
 
 (同英文版，代码保持不变，注释和说明翻译为中文)
 
-## 最佳实践
+## 最佳实践（可选）
 
 1. **实践 A**：说明
 2. **实践 B**：说明

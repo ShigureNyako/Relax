@@ -134,9 +134,11 @@ of this setting.
 :::
 ```
 
-## Verification Checklist Template
+## Internal Verification Checklist Template
 
-Use this checklist for each doc page:
+Use this checklist in internal working notes or the PR's validation evidence for each doc page. Do not copy it into the user page or publish it as a test/training acceptance report. Test counts, run logs, machine traces, and verification history belong with this evidence, not in guide content or navigation.
+
+Use verified behavior to explain required settings, limitations, and troubleshooting. Do not turn one successful test or experiment into an unconditional feature, performance, quality, or reliability guarantee.
 
 ```markdown
 ## Verification for [feature-name] docs
@@ -152,4 +154,7 @@ Use this checklist for each doc page:
 - [ ] All repository paths exist (every file/dir path like `relax/foo/bar.py` or `scripts/training/*/run-*.sh` mentioned in the doc must be confirmed to exist in the repo via `ls` or `read_file`)
 - [ ] English and Chinese versions have identical technical content
 - [ ] All internal links point to existing doc pages
+- [ ] User content explains purpose, when to use, runnable steps, defaults, limitations, and troubleshooting without test/acceptance-report material
+- [ ] Both languages use short sentences, clear actors/actions, and consistent terms; “80% of the way to ASD-STE100” is a clarity goal, not a compliance claim
+- [ ] Docs build and emitted link/render checks completed; missing hardware validation is reported in the PR, not the user page
 ```
