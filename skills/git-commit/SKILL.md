@@ -63,7 +63,7 @@ Separate the subject from an optional body or footer with a blank line.
 
 ### 3. Body for non-trivial commits
 
-Include a body for non-trivial commits to explain the motivation, design choices, or validation. Plain paragraphs or bullet points are sufficient. Prefer Markdown headings when they help organize a longer body; emoji are optional formatting examples. When using headings in a commit body, start sections at H2 (`##`) and use H3 (`###`) for nested subsections; do not use H1 (`#`) in the body.
+Include a body for non-trivial commits to explain the motivation, design choices, or validation. Plain paragraphs or bullet points are sufficient. Prefer Markdown headings when they help organize a longer body; emoji are optional formatting examples.
 
 Choose optional emoji headings using [Gitmoji](https://gitmoji.dev/) meanings. The table gives examples: 🎨 for formatting, 👷 for CI, 🔧 for configuration, and 📦️ for package changes; dependency upgrades can use ⬆️.
 
