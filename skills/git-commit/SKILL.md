@@ -63,7 +63,7 @@ Separate the subject from an optional body or footer with a blank line.
 
 ### 3. Body for non-trivial commits
 
-Include a body for non-trivial commits to explain the motivation, design choices, or validation. Plain paragraphs or bullet points are sufficient. Prefer Markdown headings when they help organize a longer body; emoji are optional formatting examples.
+Include a body for non-trivial commits to explain the motivation, design choices, or validation. Plain paragraphs or bullet points are sufficient. Prefer Markdown headings when they help organize a longer body; emoji are optional formatting examples. When using headings in a commit body, start sections at H2 (`##`) and use H3 (`###`) for nested subsections; do not use H1 (`#`) in the body.
 
 Choose optional emoji headings using [Gitmoji](https://gitmoji.dev/) meanings. The table gives examples: 🎨 for formatting, 👷 for CI, 🔧 for configuration, and 📦️ for package changes; dependency upgrades can use ⬆️.
 
@@ -71,41 +71,41 @@ Choose optional emoji headings using [Gitmoji](https://gitmoji.dev/) meanings. T
 
 | Type     | Emoji | Heading Format              |
 | -------- | ----- | --------------------------- |
-| feat     | ✨    | `# ✨ Feature`              |
-| fix      | 🐛    | `# 🐛 Bug Fix`              |
-| refactor | ♻️    | `# ♻️ Refactor`             |
-| perf     | ⚡️   | `# ⚡️ Performance`         |
-| test     | ✅    | `# ✅ Tests`                |
-| docs     | 📝    | `# 📝 Documentation`        |
-| ci       | 👷    | `# 👷 CI/CD`                |
-| chore    | 🔧    | `# 🔧 Chore`                |
-| style    | 🎨    | `# 🎨 Style`                |
-| build    | 📦️   | `# 📦️ Build`               |
+| feat     | ✨    | `## ✨ Feature`             |
+| fix      | 🐛    | `## 🐛 Bug Fix`             |
+| refactor | ♻️    | `## ♻️ Refactor`            |
+| perf     | ⚡️   | `## ⚡️ Performance`        |
+| test     | ✅    | `## ✅ Tests`               |
+| docs     | 📝    | `## 📝 Documentation`       |
+| ci       | 👷    | `## 👷 CI/CD`               |
+| chore    | 🔧    | `## 🔧 Chore`               |
+| style    | 🎨    | `## 🎨 Style`               |
+| build    | 📦️   | `## 📦️ Build`              |
 
 **Multi-type commits**: Use the primary type in the subject. A longer body can group related details by change type.
 
 **Multi-type body example:**
 
 ```markdown
-# 🐛 Bug Fix
+## 🐛 Bug Fix
 
-## Fix token expiration check
+### Fix token expiration check
 
 - Fix token expiration check that always returned false
 
 ---
 
-# ♻️ Refactor
+## ♻️ Refactor
 
-## Simplify validation logic
+### Simplify validation logic
 
 - Refactor auth middleware to use early return pattern
 
 ---
 
-# ✅ Tests
+## ✅ Tests
 
-## Add auth unit tests
+### Add auth unit tests
 
 - Add unit tests for edge cases
 - Test token refresh flow
@@ -114,9 +114,9 @@ Choose optional emoji headings using [Gitmoji](https://gitmoji.dev/) meanings. T
 **Single-type body example:**
 
 ```markdown
-# ✨ Feature
+## ✨ Feature
 
-## Add user endpoints
+### Add user endpoints
 
 - Implement GET /users/{id} endpoint
 - Add POST /users for creating new users
@@ -128,9 +128,9 @@ Choose optional emoji headings using [Gitmoji](https://gitmoji.dev/) meanings. T
 ```bash
 printf 'feat(skills): add code-review skill with checklists
 
-# ✨ Feature
+## ✨ Feature
 
-## Add code-review skill with reference documentation
+### Add code-review skill with reference documentation
 
 - SOLID principles checklist
 - Python/ML best practices
