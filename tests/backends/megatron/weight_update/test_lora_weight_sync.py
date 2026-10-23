@@ -14,9 +14,6 @@ Consolidates three previously separate suites:
   the adapter-param skip predicate, the delta-skip early-return contract, the
   Megatron->HF target-module expansion, the tp_size=1 merge formula, and the
   base/adapter prefix-join used by the merge lookup.
-
-Most GPU/megatron-dependent pieces are guarded with ``importorskip``. The real
-LoRAMerge comparison requires the pinned Bridge API and fails if it is missing.
 """
 
 import json
@@ -359,8 +356,6 @@ class TestMergeContract:
         assert expected.shape == base.shape
 
     def test_tp1_matches_real_loramerge(self):
-        # The CI image pins Bridge with this API; missing dependencies or API
-        # drift must fail rather than silently dropping the real comparison.
         from megatron.bridge.peft.lora_merge import LoRAMerge
 
         torch.manual_seed(0)
